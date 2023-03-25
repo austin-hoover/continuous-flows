@@ -2,27 +2,38 @@ import math
 import torch
 from torch.nn.functional import pad
 
-from phi import *
+
+def vectorize(x):
+    """Vectorize tensor x."""
+    return x.view(-1, 1)
 
 
-def vec(x):
-    """vectorize torch tensor x"""
-    return x.view(-1,1)
+def objective(x, Phi, tspan, nt, stepper="rk4", alph=[1.0, 1.0, 1.0]):
+    """Evaluate objective function of OT Flow problem.
+    
+    See Eq. (8) in the paper.
 
-def OTFlowProblem(x, Phi, tspan , nt, stepper="rk4", alph =[1.0,1.0,1.0] ):
-    """
-
-    Evaluate objective function of OT Flow problem; see Eq. (8) in the paper.
-
-    :param x:       input data tensor nex-by-d
-    :param Phi:     neural network
-    :param tspan:   time range to integrate over, ex. [0.0 , 1.0]
-    :param nt:      number of time steps
-    :param stepper: string "rk1" or "rk4" Runge-Kutta schemes
-    :param alph:    list of length 3, the alpha value multipliers
-    :return:
-        Jc - float, objective function value dot(alph,cs)
-        cs - list length 5, the five computed costs
+    Parameters
+    ----------
+    x : tensor, shape (nex, d)
+        Input data tensor.
+    Phi : torch.nn.Module
+        A neural network.
+    tspan : list[float], shape (2,)
+        Integration time range; ex: [0.0 , 1.0].
+    nt : int
+        The number of time steps.
+    stepper : {"rk1", "rk4"}
+        The Runge-Kutta scheme.
+    alph : list[float], shape (3,)
+        The alpha value multipliers.
+    
+    Returns
+    -------
+    Jc : float
+        The objective function value dot(alph, cs).
+    cs : list, shape (5,)
+        The five computed costs.
     """
     h = (tspan[1]-tspan[0]) / nt
 
@@ -51,19 +62,27 @@ def OTFlowProblem(x, Phi, tspan , nt, stepper="rk4", alph =[1.0,1.0,1.0] ):
     return sum(i[0] * i[1] for i in zip(cs, alph)) , cs
 
 
-
 def stepRK4(odefun, z, Phi, alph, t0, t1):
+    """Runge-Kutta 4 integration scheme.
+    
+    Parameters
+    ----------
+    odefun : callable
+        Function to apply at every time step.
+    z : tensor, shape (nex, d+4)
+        Inputs.
+    Phi : torch.nn.Module
+        The Phi potential function.
+    alph : list[float], shape (3,)
+        The 3 alpha values for the OT-Flow Problem.
+    t0, t1 : float
+        Start/stop time.
+        
+    Returns
+    -------
+    tensor, shape (nex, d + 4)
+        The features at time t1.
     """
-        Runge-Kutta 4 integration scheme
-    :param odefun: function to apply at every time step
-    :param z:      tensor nex-by-d+4, inputs
-    :param Phi:    Module, the Phi potential function
-    :param alph:   list, the 3 alpha values for the OT-Flow Problem
-    :param t0:     float, starting time
-    :param t1:     float, end time
-    :return: tensor nex-by-d+4, features at time t1
-    """
-
     h = t1 - t0 # step size
     z0 = z
 
@@ -81,36 +100,63 @@ def stepRK4(odefun, z, Phi, alph, t0, t1):
 
     return z
 
+
 def stepRK1(odefun, z, Phi, alph, t0, t1):
-    """
-        Runge-Kutta 1 / Forward Euler integration scheme.  Added for comparison, but we recommend stepRK4.
-    :param odefun: function to apply at every time step
-    :param z:      tensor nex-by-d+4, inputs
-    :param Phi:    Module, the Phi potential function
-    :param alph:   list, the 3 alpha values for the mean field game problem
-    :param t0:     float, starting time
-    :param t1:     float, end time
-    :return: tensor nex-by-d+4, features at time t1
+    """Runge-Kutta 1 / Forward Euler integration scheme.  
+    
+    Added for comparison; stepRK4 is recommended.
+    
+    Parameters
+    ----------
+    odefun : callable
+        Function to apply at every time step.
+    z : tensor, shape (nex, d+4)
+        Inputs.
+    Phi : torch.nn.Module
+        The Phi potential function.
+    alph : list[float], shape (3,)
+        The 3 alpha values for the mean field game problem.
+    t0, t1 : float
+        Start/stop time.
+        
+    Returns
+    -------
+    tensor, shape (nex, d + 4)
+        The features at time t1.
     """
     z += (t1 - t0) * odefun(z, t0, Phi, alph=alph)
     return z
 
 
-def integrate(x, net, tspan , nt, stepper="rk4", alph =[1.0,1.0,1.0], intermediates=False ):
+def integrate(
+    x, network, tspan, nt, stepper="rk4", alph=[1.0, 1.0, 1.0], intermediates=False
+):
+    """Perform the time integration in the d-dimensional space.
+    
+    Parameters
+    ----------
+    x : tensor, shape (nex, d)
+        Input data tensor.
+    network : torch.nn.Module
+        Neural network Phi.
+    tspan : list[float], shape (2,)
+        Integration time range; ex: [0.0 , 1.0].
+    nt : int
+        The number of time steps.
+    stepper : {"rk1", "rk4"}
+        The Runge-Kutta scheme.
+    alph : list[float], shape (3,)
+        The alpha value multipliers.
+    intermediates : bool
+        If True, save all intermediate time points along the trajectories.
+    
+    Returns
+    -------
+    z : tensor, shape (nex, d + 4)
+        The features at time t1. (Returned if `intermediates=False`.)
+    zFull : tensor, shape (nex, d + 3, nt + 1)
+        Trajectories from time t0 to t1. (Returned if `intermediates=True`.)
     """
-        perform the time integration in the d-dimensional space
-    :param x:       input data tensor nex-by-d
-    :param net:     neural network Phi
-    :param tspan:   time range to integrate over, ex. [0.0 , 1.0]
-    :param nt:      number of time steps
-    :param stepper: string "rk1" or "rk4" Runge-Kutta schemes
-    :param alph:    list of length 3, the alpha value multipliers
-    :param intermediates: bool, True means save all intermediate time points along trajectories
-    :return:
-        z - tensor nex-by-d+4, features at time t1
-        OR zFull - tensor nex-by-d+3-by-nt+1 , trajectories from time t0 to t1 (when intermediates=True)
-    """
-
     h = (tspan[1]-tspan[0]) / nt
 
     # initialize "hidden" vector to propagate with all the additional dimensions for all the ODEs
@@ -124,11 +170,11 @@ def integrate(x, net, tspan , nt, stepper="rk4", alph =[1.0,1.0,1.0], intermedia
 
         if stepper == 'rk4':
             for k in range(nt):
-                zFull[:,:,k+1] = stepRK4(odefun, zFull[:,:,k] , net, alph, tk, tk+h)
+                zFull[:,:,k+1] = stepRK4(odefun, zFull[:,:,k], network, alph, tk, tk+h)
                 tk += h
         elif stepper == 'rk1':
             for k in range(nt):
-                zFull[:,:,k+1] = stepRK1(odefun, zFull[:,:,k] , net, alph, tk, tk+h)
+                zFull[:,:,k+1] = stepRK1(odefun, zFull[:,:,k], network, alph, tk, tk+h)
                 tk += h
 
         return zFull
@@ -136,11 +182,11 @@ def integrate(x, net, tspan , nt, stepper="rk4", alph =[1.0,1.0,1.0], intermedia
     else:
         if stepper == 'rk4':
             for k in range(nt):
-                z = stepRK4(odefun,z,net, alph,tk,tk+h)
+                z = stepRK4(odefun,z, network, alph,tk,tk+h)
                 tk += h
         elif stepper == 'rk1':
             for k in range(nt):
-                z = stepRK1(odefun,z,net, alph,tk,tk+h)
+                z = stepRK1(odefun,z, network, alph,tk,tk+h)
                 tk += h
 
         return z
@@ -149,19 +195,18 @@ def integrate(x, net, tspan , nt, stepper="rk4", alph =[1.0,1.0,1.0], intermedia
     return -1
 
 
-
 def C(z):
-    """Expected negative log-likelihood; see Eq.(3) in the paper"""
+    """Expected negative log-likelihood; see Eq.(3) in the paper."""
     d = z.shape[1]-3
     l = z[:,d] # log-det
-
     return -( torch.sum(  -0.5 * math.log(2*math.pi) - torch.pow(z[:,0:d],2) / 2  , 1 , keepdims=True ) + l.unsqueeze(1) )
 
 
-def odefun(x, t, net, alph=[1.0,1.0,1.0]):
-    """
-    neural ODE combining the characteristics and log-determinant (see Eq. (2)), the transport costs (see Eq. (5)), and
-    the HJB regularizer (see Eq. (7)).
+def odefun(x, t, network, alph=[1.0, 1.0, 1.0]):
+    """Neural ODE.
+    
+    Combines the characteristics and log-determinant (see Eq. (2)), the 
+    transport costs (see Eq. (5)), and the HJB regularizer (see Eq. (7)).
 
     d_t  [x ; l ; v ; r] = odefun( [x ; l ; v ; r] , t )
 
@@ -175,7 +220,7 @@ def odefun(x, t, net, alph=[1.0,1.0,1.0]):
 
     z = pad(x[:, :d], (0, 1, 0, 0), value=t) # concatenate with the time t
 
-    gradPhi, trH = net.trHess(z)
+    gradPhi, trH = network.hessian_trace(z)
 
     dx = -(1.0/alph[0]) * gradPhi[:,0:d]
     dl = -(1.0/alph[0]) * trH.unsqueeze(1)
@@ -183,5 +228,3 @@ def odefun(x, t, net, alph=[1.0,1.0,1.0]):
     dr = torch.abs(  -gradPhi[:,-1].unsqueeze(1) + alph[0] * dv  ) 
     
     return torch.cat( (dx,dl,dv,dr) , 1  )
-
-
