@@ -1,2 +1,3 @@
-from .otflow import *
-from .potential import *
+from .core import *
+from . import distributions
+from . import potential

@@ -7,13 +7,13 @@ import torch
 import torch.nn as nn
 
 
-def antiderivTanh(x):
-    """Activation function aka the antiderivative of tanh."""
+def anti_deriv_tanh(x):
+    """Activation function aka the anti_derivative of tanh."""
     return torch.log(torch.exp(x) + torch.exp(-x))
 
 
-def derivTanh(x):
-    """act'' aka the second derivative of the activation function antiderivTanh."""
+def deriv_tanh(x):
+    """act'' aka the second derivative of the activation function anti_deriv_tanh."""
     return 1 - torch.pow(torch.tanh(x), 2)
 
 
@@ -44,7 +44,7 @@ class ResNN(nn.Module):
         self.layers.append(nn.Linear(m, m, bias=True))  # resnet layers
         for i in range(nTh - 2):
             self.layers.append(copy.deepcopy(self.layers[1]))
-        self.act = antiderivTanh
+        self.act = anti_deriv_tanh
         self.h = 1.0 / (self.nTh - 1.0)  # step size for the ResNet
 
     def forward(self, x):
@@ -69,7 +69,7 @@ class Potential(nn.Module):
     
     Phi(x, t) = w' * ResNet([x; t]) + 0.5 * [x' t] * A'A * [x; t] + b'*[x; t] + c
     """
-    def __init__(self, nTh, m, d, r=10, alpha=[1.0, 1.0, 1.0, 1.0, 1.0]):
+    def __init__(self, nTh=None, m=None, d=None, r=10, alpha=[1.0, 1.0, 1.0, 1.0, 1.0]):
         """
         Parameters
         ----------
@@ -133,7 +133,7 @@ class Potential(nn.Module):
             Trace of Hessian of Phi.
         """
         # Code in E = eye(d + 1, d) as index slicing instead of matrix multiplication
-        # assumes specific N.act as the antiderivative of tanh.
+        # assumes specific N.act as the anti_derivative of tanh.
 
         N = self.N
         m = N.layers[0].weight.shape[0]
@@ -177,12 +177,12 @@ class Potential(nn.Module):
             return grad.t()
 
         # -----------------
-        # trace of Hessian
+        # Hessian trace
         #-----------------
 
         # t_0, the trace of the opening layer
         Kopen = N.layers[0].weight[:,0:d]   # indexed version of Kopen = torch.mm(N.layers[0].weight, E)
-        temp = derivTanh(opening.t()) * z[1]
+        temp = deriv_tanh(opening.t()) * z[1]
         trH = torch.sum(temp.reshape(m, -1, nex) * torch.pow(Kopen.unsqueeze(2), 2), dim=(0, 1))  # trH = t_0
 
         # grad_s u_0 ^ T
@@ -201,49 +201,9 @@ class Potential(nn.Module):
                 term = z[i + 1]
 
             temp = N.layers[i].forward(u[i - 1]).t()  # (K_i * u_{i-1} + b_i)
-            t_i = torch.sum((derivTanh(temp) * term).reshape(m, -1, nex) * torch.pow(KJ, 2), dim=(0, 1))
+            t_i = torch.sum((deriv_tanh(temp) * term).reshape(m, -1, nex) * torch.pow(KJ, 2), dim=(0, 1))
             trH = trH + N.h * t_i  # add t_i to the accumulate trace
             Jac = Jac + N.h * torch.tanh(temp).reshape(m, -1, nex) * KJ  # update Jacobian
 
         ## Indexed version of: `return (grad.t(), trH + torch.trace(torch.mm(E.t(), torch.mm(symA, E))))`.
-        return grad.t(), trH + torch.trace(symA[0:d, 0:d])
-
-
-if __name__ == "__main__":
-
-    # Test case.
-    d = 2
-    m = 5
-
-    network = Potential(nTh=2, m=m, d=d)
-    network.N.layers[0].weight.data = 0.1 + 0.0 * network.N.layers[0].weight.data
-    network.N.layers[0].bias.data = 0.2 + 0.0 * network.N.layers[0].bias.data
-    network.N.layers[1].weight.data = 0.3 + 0.0 * network.N.layers[1].weight.data
-    network.N.layers[1].weight.data = 0.3 + 0.0 * network.N.layers[1].weight.data
-
-    x = torch.Tensor([
-        [1.0, 4.0, 0.5], 
-        [2.0, 5.0, 0.6], 
-        [3.0, 6.0, 0.7], 
-        [0.0, 0.0, 0.0],
-    ])
-    y = network(x)
-    print(y)
-
-    # Test timings.
-    d = 400
-    m = 32
-    nex = 1000
-
-    network = Potential(nTh=5, m=m, d=d)
-    network.eval()
-    x = torch.randn(nex, d + 1)
-    y = network(x)
-
-    end = time.time()
-    grad, hess = network.hessian_trace(x)
-    print(f"hessian_trace: time = {time.time() - end} [sec]")
-
-    end = time.time()
-    grad = network.hessian_trace(x, just_grad=True)
-    print(f"hessian_trace(just_grad=True): time = {time.time() - end} [sec]")
+        return grad.t(), trH + torch.trace(symA[:d, :d])
