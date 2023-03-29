@@ -167,22 +167,7 @@ class OptimalTransport(ContinuousNormalizingFlow):
                 z = self.step(z, tk, tk + h)
                 tk += h
             return z
-        
-    def negative_log_likelihood(self, z):
-        """Expected negative log-likelihood (Eq. (3)).
-                        
-        Parameters
-        ----------
-        z : tensor, shape (n, d + 4).
-            The first d columns are the coordinates in the latent space. The next
-            column is the log-determinant of the Jacobian. The final two columns
-            (transport cost v and HJB violation r) are not used here.
-        """        
-        d = z.shape[1] - 3
-        log_det = z[:, d].unsqueeze(1)
-        return -(self.base.log_prob(z[:, :d]) + log_det)
-        # return torch.sum(0.5 * math.log(2.0 * math.pi) + 0.5 * torch.pow(z[:, :d], 2), 1, keepdims=True) - l
-
+                
     def objective(self, x, nt=8, return_costs=False):
         """Evaluate the objective function (Eq. (8)).
         
@@ -208,10 +193,12 @@ class OptimalTransport(ContinuousNormalizingFlow):
             The three computed costs: [L, C, R]. Only returned if `return_costs` is True.
         """
         z = self.integrate(x, tspan=[0.0, 1.0], nt=nt, intermediates=False)
+        log_det = z[:, self.d].unsqueeze(1)
+        log_prob = self.base.log_prob(z[:, :self.d]) + log_det
 
         # Assume all examples are equally weighted.
         cost_L = torch.mean(z[:, -2])
-        cost_C = torch.mean(self.negative_log_likelihood(z))
+        cost_C = torch.mean(-log_prob)
         cost_R = torch.mean(z[:, -1])
         
         costs = [cost_L, cost_C, cost_R]
