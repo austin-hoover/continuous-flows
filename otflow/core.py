@@ -207,6 +207,9 @@ class OptimalTransport(ContinuousNormalizingFlow):
             return (loss, costs)
         else:
             return loss
+        
+    def objective_reverse(self, nt=8, return_costs=False):
+        raise NotImplementedError
             
     def unpack(self, x):
         """Return (x, l, v, r)."""
@@ -215,12 +218,11 @@ class OptimalTransport(ContinuousNormalizingFlow):
     def log_prob(self, x, nt=8, intermediates=False):
         """Evaluate the predicted log-probability."""
         if intermediates:
-            z = self.integrate(x, tspan=[0.0, 1.0], nt=nt, intermediates=True)
-            log_det = torch.exp(z[:, self.d, :])
-            z = z[:, :self.d, :]
+            z = self.integrate(x, tspan=[0.0, 1.0], nt=nt, intermediates=True)            
+            log_det = z[:, self.d, :]
             log_prob = torch.zeros(log_det.shape)
             for i in range(log_prob.shape[-1]):
-                log_prob[:, i] = self.base.log_prob(z[..., i]) + log_det[:, i]
+                log_prob[:, i] = self.base.log_prob(z[:, :self.d, i]) + log_det[:, i]
             return log_prob
         else:
             z, log_det, _, _ = self.unpack(self.integrate(x, tspan=[0.0, 1.0], nt=nt))
