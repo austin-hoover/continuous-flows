@@ -230,8 +230,8 @@ class OptimalTransport(ContinuousNormalizingFlow):
         
     def forward(self, z, nt=8):
         """Flow from latent space to data space."""
-        return self.upack(self.integrate(z, tspan=[1.0, 0.0], nt=nt))
+        return self.unpack(self.integrate(z, tspan=[1.0, 0.0], nt=nt))
     
     def inverse(self, x, nt=8):
         """Flow from data space to latent space."""
-        return self.upack(self.integrate(x, tspan=[0.0, 1.0], nt=nt))
+        return self.unpack(self.integrate(x, tspan=[0.0, 1.0], nt=nt))
