@@ -26,3 +26,6 @@ class Gaussian:
             1,
         )
         return log_p
+    
+    def sample(self, n):
+        return torch.randn((n, self.d))
