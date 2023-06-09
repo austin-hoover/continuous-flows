@@ -3,6 +3,7 @@ import math
 
 import torch
 from torch.nn.functional import pad
+from tqdm import tqdm
 
 from .potential import Potential
 
@@ -216,7 +217,7 @@ class OptimalTransport(ContinuousNormalizingFlow):
         return x[:, :self.d], x[:, self.d], x[:, self.d + 1], x[:, self.d + 2]
     
     def log_prob(self, x, nt=8, intermediates=False):
-        """Evaluate the predicted log-probability."""
+        """Evaluate the log-probability."""
         if intermediates:
             z = self.integrate(x, tspan=[0.0, 1.0], nt=nt, intermediates=True)            
             log_det = z[:, self.d, :]
@@ -235,3 +236,18 @@ class OptimalTransport(ContinuousNormalizingFlow):
     def inverse(self, x, nt=8):
         """Flow from data space to latent space."""
         return self.unpack(self.integrate(x, tspan=[0.0, 1.0], nt=nt))
+
+    def sample(self, n=10, nt=8, batch_size=None, verbose=False):
+        """Draw n samples from the model."""
+        with torch.no_grad():
+            if batch_size is None:
+                samples, _, _, _ = self.forward(self.base.sample(n), nt=nt)
+                return samples
+            else:
+                samples = []
+                n_batches = int(n / batch_size)
+                _range = tqdm(range(n_batches)) if verbose else range(n_batches)
+                for _ in _range:
+                    _samples, _, _, _ = self.forward(self.base.sample(batch_size))
+                    samples.append(_samples)
+                return torch.vstack(samples)
