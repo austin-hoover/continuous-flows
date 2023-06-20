@@ -89,7 +89,7 @@ class OptimalTransport(ContinuousNormalizingFlow):
         m : int
             Number of hidden dimensions.
         d : int
-            Number of dimensions.
+            Number of input dimensions.
         """
         super().__init__(base=base)
         self.d = d
@@ -197,11 +197,9 @@ class OptimalTransport(ContinuousNormalizingFlow):
         log_det = z[:, self.d].unsqueeze(1)
         log_prob = self.base.log_prob(z[:, :self.d]) + log_det
 
-        # Assume all examples are equally weighted.
         cost_L = torch.mean(z[:, -2])
         cost_C = torch.mean(-log_prob)
         cost_R = torch.mean(z[:, -1])
-        
         costs = [cost_L, cost_C, cost_R]
         loss = sum(i[0] * i[1] for i in zip(costs, self.alpha))
         if return_costs:
@@ -238,9 +236,9 @@ class OptimalTransport(ContinuousNormalizingFlow):
         return self.unpack(self.integrate(x, tspan=[0.0, 1.0], nt=nt))
 
     def sample(self, n=10, nt=8, batch_size=None, verbose=False):
-        """Draw n samples from the model."""
+        """Draw n samples from the model."""            
         with torch.no_grad():
-            if batch_size is None:
+            if batch_size is None or batch_size >= n:
                 samples, _, _, _ = self.forward(self.base.sample(n), nt=nt)
                 return samples
             else:
