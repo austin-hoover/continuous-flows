@@ -21,37 +21,11 @@ nfm = cnf.OTFlow(
 )
 
 x = torch.tensor([[1.0, -1.0],])
-print("x =", x[0].data.numpy())
+z_full = nfm.integrate(x, tspan=[0.0, 1.0], nt=nt, intermediates=True)
+print("tspan=[0, 1]")
+print(np.around(z_full.data.numpy()[0, :, :].T, 3))
 
-output = nfm.integrate(x, tspan=[0.0, 1.0], nt=nt, intermediates=True)
-z = output[:, :d, :]
-l = output[:, d, :]
-v = output[:, d + 1, :]
-r = output[:, d + 2, :]
-
-print()
-print()
-print("z =", z[0].data.numpy())
-print()
-print("l =", l[0].data.numpy())
-print()
-print("v =", v[0].data.numpy())
-print()
-print("r =", r[0].data.numpy())
-
-z = z[:, :d, -1]
-output = nfm.integrate(z, tspan=[1.0, 0.0], nt=nt, intermediates=True)
-x = output[:, :d, :]
-l = output[:, d, :]
-v = output[:, d + 1, :]
-r = output[:, d + 2, :]
-
-print()
-print()
-print("x =", x[0].data.numpy())
-print()
-print("l =", l[0].data.numpy())
-print()
-print("v =", v[0].data.numpy())
-print()
-print("r =", r[0].data.numpy())
+x = z_full[:, :d, -1]
+z_full = nfm.integrate(x, tspan=[1.0, 0.0], nt=nt, intermediates=True)
+print("tspan=[1, 0]")
+print(np.round(z_full.data.numpy()[0, :, :].T, 3))

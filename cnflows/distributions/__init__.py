@@ -6,6 +6,7 @@ from .base import DiagGaussian
 from .base import GaussianMixture
 from .base import GaussianPCA
 from .base import GlowBase
+from .base import Uniform
 from .base import UniformGaussian
 from .target import CircularGaussianMixture
 from .target import RingMixture
