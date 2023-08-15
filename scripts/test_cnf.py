@@ -30,16 +30,26 @@ base_dist = cnf.distributions.DiagGaussian(2)
 
 # Create normalizing flow model.
 d = 2
-alpha = [1.0, 100.0, 15.0]
+alpha = [1.0, 100.0, 5.0]
 n_layers = 2
-m = 32
+m = 16
 nfm = cnf.OTFlow(d=d, n_layers=n_layers, m=m, alpha=alpha, base_dist=None)
 nfm = nfm.to(precision).to(device)
 
 
 # Create optimizer
 optimizer = torch.optim.Adam(nfm.parameters(), lr=0.01, weight_decay=0.0)
-torch.optim.lr_scheduler
+lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+    optimizer, 
+    mode="min",
+    factor=0.33, 
+    patience=100, 
+    threshold=0.0001, 
+    threshold_mode="rel",
+    cooldown=0, 
+    min_lr=1.00e-04, 
+    verbose=False
+)
 
 # Train the model.
 n_iterations = 2000
@@ -55,7 +65,8 @@ for iteration in range(n_iterations):
     loss.backward()
     optimizer.step()
 
-    print(f"{iteration}, loss={loss:.2e}, L={costs[0]:.2e}, C={costs[1]:.2e}, R={costs[2]:.2e}")
+    lr = optimizer.param_groups[0]["lr"]
+    print(f"{iteration}, lr={lr:.2e}, loss={loss:.2e}, L={costs[0]:.2e}, C={costs[1]:.2e}, R={costs[2]:.2e}, best_loss={best_loss:.2e}")
 
     if loss < best_loss:
         best_loss = loss
@@ -91,3 +102,5 @@ for iteration in range(n_iterations):
 
             nfm.load_state_dict(state_dict)
             nfm.train()
+            
+    lr_scheduler.step(loss)

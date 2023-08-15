@@ -11,7 +11,7 @@ import torch
 d = 2
 m = 5
 
-net = cnf.potential.OTPotential(nTh=2, m=m, d=d)
+net = cnf.potential.OTPotential(n_layers=2, m=m, d=d)
 net.N.layers[0].weight.data = 0.1 + 0.0 * net.N.layers[0].weight.data
 net.N.layers[0].bias.data = 0.2 + 0.0 * net.N.layers[0].bias.data
 net.N.layers[1].weight.data = 0.3 + 0.0 * net.N.layers[1].weight.data
@@ -27,15 +27,15 @@ d = 400
 m = 32
 nex = 1000
 
-net = cnf.potential.OTPotential(nTh=5, m=m, d=d)
+net = cnf.potential.OTPotential(n_layers=5, m=m, d=d)
 net.eval()
 x = torch.randn(nex, d + 1)
 y = net(x)
 
 end = time.time()
 g, h = net.grad_and_hessian_trace(x)
-print("traceHess takes ", time.time() - end)
+print("grad_and_hessian_trace takes ", time.time() - end)
 
 end = time.time()
 g = net.grad_and_hessian_trace(x, just_grad=True)
-print("JustGrad takes  ", time.time() - end)
+print("just_grad takes  ", time.time() - end)

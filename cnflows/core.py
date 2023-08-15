@@ -47,6 +47,8 @@ def step_rk4(odefun, z, t0, t1):
 class OTFlow(torch.nn.Module):
     """Continuous normalizing flow (CNF) with optimal transport (OT) penalty.
 
+    The forward flow is directed from data space to latent space.
+
     Attributes
     ----------
     potential : OTPotential
@@ -57,7 +59,7 @@ class OTFlow(torch.nn.Module):
         d=2, 
         m=16, 
         n_layers=2, 
-        alpha=[1.0, 100.0, 5.0], 
+        alpha=[1.0, 1.0, 1.0], 
         base_dist=None, 
         precision=torch.float32, 
         device=None
@@ -187,27 +189,6 @@ class OTFlow(torch.nn.Module):
         )
 
     def forward(self, x, nt=8):
-        """Flow from latent space to data space.
-
-        Parameters
-        ----------
-        x : tensor, shape (n, d)
-            Input latent-space coordinates.
-
-        Returns
-        -------
-        tensor, shape (n, d)
-            Transformed coordinates.
-        tensor, shape (n, 1)
-            Log determinant of the transformation.
-        tensor, shpae (n, 1)
-            Accumulated transport cost.
-        tensor, shpae (n, 1)
-            Accumulated HJB violation cost.
-        """
-        return self.unpack(self.integrate(x, tspan=[1.0, 0.0], nt=nt))
-
-    def inverse(self, x, nt=8):
         """Flow from data space to latent space.
 
         Parameters
@@ -227,6 +208,27 @@ class OTFlow(torch.nn.Module):
             Accumulated HJB violation cost.
         """
         return self.unpack(self.integrate(x, tspan=[0.0, 1.0], nt=nt))
+
+    def inverse(self, x, nt=8):
+        """Flow from latent space to data space.
+
+        Parameters
+        ----------
+        x : tensor, shape (n, d)
+            Input latent-space coordinates.
+
+        Returns
+        -------
+        tensor, shape (n, d)
+            Transformed coordinates.
+        tensor, shape (n, 1)
+            Log determinant of the transformation.
+        tensor, shape (n, 1)
+            Accumulated transport cost.
+        tensor, shape (n, 1)
+            Accumulated HJB violation cost.
+        """
+        return self.unpack(self.integrate(x, tspan=[1.0, 0.0], nt=nt))
 
     def forward_kld(self, x, nt=8, return_costs=False):
         """Evaluate the forward KLD + transport costs (see Eq. (8)).
@@ -250,7 +252,7 @@ class OTFlow(torch.nn.Module):
         costs : list[float], shape (3,)
             The three computed costs: [L, C, R]. Only returned if `return_costs` is True.
         """
-        xn, log_det, L, R = self.inverse(x, nt=nt)
+        xn, log_det, L, R = self.forward(x, nt=nt)
         cost_L = torch.mean(L)
         cost_C = -torch.mean(self.base_dist.log_prob(xn) + log_det)
         cost_R = torch.mean(R)
@@ -275,7 +277,7 @@ class OTFlow(torch.nn.Module):
                 log_prob[:, i] = self.base_dist.log_prob(z[:, :self.d, i]) + log_det[:, i]
             return log_prob
         else:
-            xn, log_det, _, _ = self.inverse(x, nt=nt)
+            xn, log_det, _, _ = self.forward(x, nt=nt)
             return self.base_dist.log_prob(xn) + log_det
 
     def sample(self, n=10, nt=8, batch_size=None):
@@ -283,7 +285,7 @@ class OTFlow(torch.nn.Module):
         if batch_size is None:
             batch_size = n
         if batch_size <= n:
-            x, _, _, _ = self.forward(self.base_dist.sample(n), nt=nt)
+            x, _, _, _ = self.inverse(self.base_dist.sample(n), nt=nt)
             return x
         x = torch.zeros(n, self.d)
         for batch_index in range(int(n / batch_size)):
@@ -292,7 +294,7 @@ class OTFlow(torch.nn.Module):
             if hi > n:
                 hi = n
                 batch_size = n - lo
-            x[lo:hi], _, _, _ = self.forward(self.base_dist.sample(batch_size), nt=nt)
+            x[lo:hi], _, _, _ = self.inverse(self.base_dist.sample(batch_size), nt=nt)
         return x
 
 
