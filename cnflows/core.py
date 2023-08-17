@@ -91,6 +91,9 @@ class OTFlow(torch.nn.Module):
         self.potential = OTPotential(n_layers=n_layers, m=m, d=d)
         self.potential = self.potential.to(precision).to(device)
 
+    def get_n_params(self):
+        return sum(p.numel() for p in self.parameters() if p.requires_grad)
+
     def odefun(self, x, t):
         """Neural ordinary differential equation (ODE) function.
 
