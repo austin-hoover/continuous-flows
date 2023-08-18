@@ -8,10 +8,8 @@ import torch.nn as nn
 
 
 class TargetDistribution(nn.Module):
-    """
-    Sample target distributions to test models
-    """
-
+    """Sample target distributions to test models."""
+    
     def __init__(self, prop_scale=torch.tensor(6.0), prop_shift=torch.tensor(-3.0)):
         """Constructor
 
@@ -76,14 +74,13 @@ class TargetDistribution(nn.Module):
 
 
 class TwoMoons(TargetDistribution):
-    """
-    Bimodal two-dimensional distribution
-    """
+    """Bimodal two-dimensional distribution."""
 
     def __init__(self):
         super().__init__()
         self.n_dims = 2
         self.max_log_prob = 0.0
+        self.name = "twomoons"
 
     def log_prob(self, z):
         """
@@ -109,9 +106,7 @@ class TwoMoons(TargetDistribution):
 
 
 class CircularGaussianMixture(nn.Module):
-    """
-    Two-dimensional Gaussian mixture arranged in a circle
-    """
+    """Two-dimensional Gaussian mixture arranged in a circle."""
 
     def __init__(self, n_modes=8):
         """Constructor
@@ -153,9 +148,7 @@ class CircularGaussianMixture(nn.Module):
 
 
 class RingMixture(TargetDistribution):
-    """
-    Mixture of ring distributions in two dimensions
-    """
+    """Mixture of ring distributions in two dimensions."""
 
     def __init__(self, n_rings=2):
         super().__init__()
@@ -175,9 +168,7 @@ class RingMixture(TargetDistribution):
 
 
 class ConditionalDiagGaussian(TargetDistribution):
-    """
-    Gaussian distribution conditioned on its mean and standard
-    deviation
+    """Gaussian distribution conditioned on its mean and standard deviation.
 
     The first half of the entries of the condition, also called context,
     are the mean, while the second half are the standard deviation.
