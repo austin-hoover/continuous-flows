@@ -4,8 +4,13 @@ import math
 import torch
 import torch.nn as nn
 
-from ..utils import deriv_tanh
-from ..utils import antideriv_tanh
+
+def antideriv_tanh(x):
+    return torch.abs(x) + torch.log(1.0 + torch.exp(-2.0 * torch.abs(x)))
+
+
+def deriv_tanh(x):
+    return 1.0 - torch.pow(torch.tanh(x), 2)
 
 
 class ResidualNet(nn.Module):
@@ -22,8 +27,11 @@ class ResidualNet(nn.Module):
             Number of resnet layers (number of theta layers).
         """
         super().__init__()
+
         if n_layers < 2:
-            raise ValueError("n_layers must be an integer >= 2")
+            print("n_layers must be an integer >= 2")
+            exit(1)
+
         self.d = d
         self.m = m
         self.n_layers = n_layers

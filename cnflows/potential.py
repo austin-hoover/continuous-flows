@@ -1,19 +1,21 @@
 import torch
 import torch.nn as nn
 
+from .networks import antideriv_tanh
+from .networks import deriv_tanh
 from .networks import ResidualNet
-from .utils import deriv_tanh
-from .utils import antideriv_tanh
 
 
 class OTPotential(nn.Module):
-    """Neural network approximating the potential Phi. (Eq. (9)).
+    """Neural network approximating the OT potential Phi (Eq. (9)).
 
     Phi(x, t) = w' * ResNet([x;t]) + 0.5*[x' t] * A'A * [x;t] + b'*[x;t] + c
     """
-    def __init__(self, n_layers=2, m=16, d=2, r=10):
+    def __init__(self, n_layers=2, m=16, d=2, r=10, alpha=(1.0, 1.0, 1.0, 1.0, 1.0)):
         """Constructor.
         
+        Parameters
+        ----------
         n_layers : int
             The number of resnet layers (number of theta layers).
         m : int
@@ -28,6 +30,7 @@ class OTPotential(nn.Module):
         self.m = m
         self.n_layers = n_layers
         self.d = d
+        self.alpha = alpha
 
         r = min(r, d + 1)  # if number of dimensions is smaller than default r, use that
 
@@ -44,8 +47,11 @@ class OTPotential(nn.Module):
         self.c.bias.data = torch.zeros(self.c.bias.data.shape)
 
     def forward(self, x):
-        """Calculating Phi(s, theta)...not used."""
-        symA = torch.matmul(torch.t(self.A), self.A)
+        """Calculating Phi(s, theta)...not used in OT-Flow."""
+
+        # force A to be symmetric
+        symA = torch.matmul(torch.t(self.A), self.A)  # A'A
+
         return self.w(self.N(x)) + 0.5 * torch.sum(torch.matmul(x, symA) * x, dim=1, keepdims=True) + self.c(x)
 
     def grad_and_hessian_trace(self, x, just_grad=False):
@@ -71,6 +77,7 @@ class OTPotential(nn.Module):
         """
         # code in E = eye(d+1,d) as index slicing instead of matrix multiplication
         # assumes specific N.act as the antiderivative of tanh
+
         N = self.N
         m = N.layers[0].weight.shape[0]
         nex = x.shape[0]  # number of examples in the batch

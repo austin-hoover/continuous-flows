@@ -61,8 +61,6 @@ class OTFlow(torch.nn.Module):
         n_layers=2, 
         alpha=[1.0, 1.0, 1.0], 
         base_dist=None, 
-        precision=torch.float32, 
-        device=None
     ):
         """
         Parameters
@@ -87,9 +85,7 @@ class OTFlow(torch.nn.Module):
         self.base_dist = base_dist
         if self.base_dist is None:
             self.base_dist = DiagGaussian(d)
-        self.device = device
         self.potential = OTPotential(n_layers=n_layers, m=m, d=d)
-        self.potential = self.potential.to(precision).to(device)
 
     def get_n_params(self):
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
@@ -256,12 +252,12 @@ class OTFlow(torch.nn.Module):
             The three computed costs: [L, C, R]. Only returned if `return_costs` is True.
         """
         xn, log_det, L, R = self.forward(x, nt=nt)
+        log_prob = self.base_dist.log_prob(xn) + log_det
         cost_L = torch.mean(L)
-        cost_C = -torch.mean(self.base_dist.log_prob(xn) + log_det)
+        cost_C = torch.mean(-log_prob)
         cost_R = torch.mean(R)
-        costs = [cost_L, cost_C, cost_R]
-        costs = [cost * scale for cost, scale in zip(costs, self.alpha)]
-        loss = sum(costs)
+        costs = (cost_L, cost_C, cost_R)
+        loss = sum(scale * cost for scale, cost in zip(self.alpha, costs))
         if return_costs:
             return (loss, costs)
         else:
