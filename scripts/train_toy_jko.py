@@ -20,7 +20,6 @@ import proplot as pplt
 import torch
 
 import plotting
-from utils import cvt
 from utils import get_torch_device
 from utils import Monitor
 from utils import ScriptManager
@@ -102,7 +101,8 @@ rng = None  # random number generator
 
 def get_data(n):
     data = cnf.utils.gen_toy_data(name=args.data, size=n, rng=rng)
-    data = cvt(torch.from_numpy(data))
+    data = torch.from_numpy(data)
+    data = data.type(precision).to(device, non_blocking=True)
     return data
 
 
