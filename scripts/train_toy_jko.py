@@ -20,9 +20,10 @@ import proplot as pplt
 import torch
 
 import plotting
-from tools import get_torch_device
-from tools import Monitor
-from tools import ScriptManager
+from utils import cvt
+from utils import get_torch_device
+from utils import Monitor
+from utils import ScriptManager
 
 pplt.rc["grid"] = False
 pplt.rc["cycle"] = "538"
@@ -47,7 +48,7 @@ parser.add_argument("--alpha_C", type=float, default=10.0, help="loss function s
 parser.add_argument("--alpha_R", type=float, default=1.0, help="loss function scaling (R)")
 
 parser.add_argument("--data_size", type=int, default=int(1.00e+05), help="training data size")
-parser.add_argument("--batch_size", type=int, default=1024, help="batch size")
+parser.add_argument("--batch_size", type=int, default=2048, help="batch size")
 parser.add_argument("--nt", type=int, default=8, help="number of time steps")
 
 parser.add_argument("--val_data_size", type=int, default=int(1.00e+05), help="validation - data size")
@@ -55,18 +56,18 @@ parser.add_argument("--val_batch_size", type=int, default=1024, help="validation
 parser.add_argument("--val_nt", type=int, default=8, help="validation - number of time steps")
 
 parser.add_argument("--n_steps", type=int, default=5, help="number of subproblems")
-parser.add_argument("--n_epochs", type=int, default=100, help="number of epochs")
+parser.add_argument("--n_epochs", type=int, default=50, help="number of epochs")
 parser.add_argument("--max_lr", type=float, default=1.00e-02, help="initial learning rate")
 parser.add_argument("--min_lr", type=int, default=1.00e-04, help="minimum learning rate")
 parser.add_argument("--lr_drop_factor", type=int, default=0.1)
-parser.add_argument("--lr_drop_patience", type=int, default=10)
+parser.add_argument("--lr_drop_patience", type=int, default=5)
 parser.add_argument("--lr_drop_thresh", type=int, default=0.0001)
 parser.add_argument("--early_stopping", type=int, default=0)
 parser.add_argument("--avg_scaling", type=float, default=0.1, help="loss average scaling")
 parser.add_argument("--weight_decay", type=float, default=0.0, help="ADAM weight decay")
 
 parser.add_argument("--vis_freq", type=int, default=1, help="visualization frequency")
-parser.add_argument("--vis_batch_size", type=int, default=int(1.00e+04), help="visualization batch size")
+parser.add_argument("--vis_batch_size", type=int, default=int(10.00e+04), help="visualization batch size")
 
 args = parser.parse_args()
 
@@ -78,7 +79,6 @@ precision = torch.float32
 if args.precision == "double":
     precision = torch.float64
 torch.set_default_dtype(precision)
-cvt = lambda x: x.type(precision).to(device, non_blocking=True)
 
 man = ScriptManager(
     outdir=args.outdir,

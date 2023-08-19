@@ -31,6 +31,10 @@ def get_torch_device(gpu=False):
     return torch.device("cpu")
 
 
+def cvt(x, device=None, non_blocking=True):
+    return x.type(precision).to(device, non_blocking=non_blocking)
+
+
 class ScriptManager:
     """Helps save script info/output."""
     def __init__(self, outdir=None, path=None, use_prefix=True):

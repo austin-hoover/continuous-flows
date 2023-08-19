@@ -8,6 +8,7 @@ import numpy as np
 import proplot as pplt
 import torch
 
+
 pplt.rc["grid"] = False
 pplt.rc["cycle"] = "538"
 pplt.rc["cmap.discrete"] = False
@@ -56,7 +57,7 @@ def plot_samples_chained(X_true=None, nfm=None, state_dicts=None, nt=8, bins=50,
         nfm.load_state_dict(state_dict)
         Xn, _, _, _ = nfm.forward(Xn, nt=nt)
 
-    Yn = cvt(nfm.base_dist.sample(X_true.shape[0]))
+    Yn = nfm.base_dist.sample(X_true.shape[0])
     Y = torch.clone(Yn)
     for state_dict in reversed(state_dicts):
         nfm.load_state_dict(state_dict)
