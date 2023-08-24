@@ -12,7 +12,7 @@ import proplot as pplt
 import torch
 
 
-def get_torch_device(gpu=False):
+def get_torch_device_mps(gpu=False):
     """Return torch device on M1 Mac."""
     if gpu:
         if torch.backends.mps.is_available():
@@ -33,26 +33,25 @@ def get_torch_device(gpu=False):
 
 class ScriptManager:
     """Helps save script info/output."""
-    def __init__(self, outdir=None, path=None, use_prefix=True):
-        self.outdir = outdir
-        self.path = path
+    def __init__(self, outdir=None, path=None, prefix=None):
         self.datestamp = time.strftime("%Y-%m-%d")
         self.timestamp = time.strftime("%y%m%d%H%M%S")
-        self.prefix = f"{self.timestamp}"
-        self.outdir = os.path.join(self.outdir, self.timestamp)
+        self.path = path
+        folder = self.timestamp
+        if prefix is not None:
+            folder = f"{prefix}-{folder}"
+        self.outdir = os.path.join(outdir, folder)
         if not os.path.isdir(self.outdir):
             os.makedirs(self.outdir)
-        self.use_prefix = use_prefix
         print("Output directory: {}".format(self.outdir))
-        print("Output file prefix: {}-".format(self.prefix))
 
-    def get_filename(self, filename, sep="-"):
-        if not self.use_prefix:
-            return os.path.join(self.outdir, filename)
-        return os.path.join(self.outdir, "{}{}{}".format(self.prefix, sep, filename))
+    def get_filename(self, filename):
+        return os.path.join(self.outdir, filename)
 
     def save_script_copy(self):
-        shutil.copy(self.path.absolute().as_posix(), self.get_filename(".py", sep=""))
+        filename = self.path.absolute().as_posix()
+        filename_short = filename.split("/")[-1]
+        shutil.copy(filename, self.get_filename(filename_short))
 
     def get_info(self):
         info = {
@@ -63,12 +62,6 @@ class ScriptManager:
             "datestamp": self.datestamp,
         }
         return info
-
-    def save_info(self, filename="info.txt"):
-        file = open(self.get_filename(filename), "w")
-        for key, val in self.get_info().items():
-            file.write(f"{key}: {val}\n")
-        file.close()
 
     def get_logger(self, save=True, print=True, filename="log.txt"):
         logger = logging.getLogger()
@@ -83,17 +76,12 @@ class ScriptManager:
             console_handler.setLevel(logging.INFO)
             logger.addHandler(console_handler)
         return logger
-        
+
 
 class Monitor:
     """Helps monitor training."""
-    def __init__(self, outdir=None, prefix=None, filename="history.dat", freq=1):
-        self.outdir = outdir
-        self.prefix = prefix
-        self.freq = freq
-        self.iteration = 0
+    def __init__(self, filename="history.dat", freq=1, memory=10):
         self.history = {
-            "epoch": None,
             "iteration": None,
             "lr": None,
             "loss": None,
@@ -104,41 +92,52 @@ class Monitor:
         self.filename = filename
         if self.filename is None:
             self.filename = "history.dat"
-        if self.prefix:
-            self.filename = f"{self.prefix}-{self.filename}"
-        self.filename = os.path.join(self.outdir, self.filename)
         self.file = open(self.filename, mode="w")
         self.file.write(" ".join(list(self.history)))
         self.file.write("\n")
+        
+        self.freq = freq
+        self.loss_meter = AverageMeter(memory=memory)
+        self.iteration = 0
+        self.best_loss = float("inf")
+        self.best_avg_loss = float("inf")
+        self.best_state_dict = None
 
-    def print_line(self):
-        message = "{:05.0f} epoch={:02.0f}, lr={:0.2e} loss={:9.3e} L={:9.3e} C={:9.3e} R={:9.3e}".format(
-            self.history["iteration"],
-            self.history["epoch"],
-            self.history["lr"],
-            self.history["loss"],
-            self.history["loss_L"],
-            self.history["loss_C"],
-            self.history["loss_R"],
-        )
-        print(message)
-        return message
-
-    def write_line(self):
-        self.file.write(" ".join([f"{self.history[key]}" for key in self.history]))
-        self.file.write("\n")
-
-    def action(self, **kwargs):
-        message = None
+    def action(
+        self, 
+        loss=None, 
+        loss_L=None, 
+        loss_C=None, 
+        loss_R=None, 
+        lr=None,
+    ):
+        self.loss_meter.action(loss)
         if self.iteration % self.freq == 0:
+            avg_loss = self.loss_meter.average
+            if loss < self.best_loss:
+                self.best_loss = loss
+            if avg_loss < self.best_avg_loss:
+                self.best_avg_loss = avg_loss
+            print(
+                "iter={:05.0f} lr={:0.3e} loss={:0.3e} L={:0.3e} C={:0.3e} R={:0.3e} loss_avg={:0.3e}".format(
+                    self.iteration,
+                    lr,
+                    loss,
+                    loss_L,
+                    loss_C,
+                    loss_R,
+                    self.loss_meter.average,
+                )
+            )
             self.history["iteration"] = self.iteration
-            for key, value in kwargs.items():
-                if key in self.history:
-                    self.history[key] = value
-            message = self.print_line()
-            self.write_line()
+            self.history["lr"] = lr
+            self.history["loss"] = loss
+            self.history["loss_L"] = loss_L
+            self.history["loss_C"] = loss_C
+            self.history["loss_R"] = loss_R
+            self.file.write(" ".join([f"{self.history[key]}" for key in self.history]))
+            self.file.write("\n")
         self.iteration += 1
-        return message
 
     def get_data(self):
         self.file.close()
@@ -149,4 +148,19 @@ class Monitor:
             )
         self.file = open(self.filename, mode="a")
         return data
+
+
+class AverageMeter():
+    def __init__(self, memory=10):
+        self.memory = memory
+        self.reset()
+
+    def reset(self):
+        self.values = []
+        self.average = 0.0
+
+    def action(self, value):
+        self.values.append(value)
+        self.values = self.values[-self.memory:]
+        self.average = np.mean(self.values)
         

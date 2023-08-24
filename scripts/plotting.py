@@ -1,5 +1,6 @@
 import os
 import sys
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import cnflows as cnf
@@ -30,7 +31,7 @@ def plot_samples(X_true=None, nfm=None, nt=8, bins=50, xmax=4.5, **kwargs):
     Y, _, _, _ = nfm.inverse(Yn, nt=nt)
 
     fig, axs = pplt.subplots(ncols=2, nrows=2, xspineloc="neither", yspineloc="neither")
-    for ax, points in zip(axs, [X, Xn, Y, Yn]):  
+    for ax, points in zip(axs, [X, Xn, Y, Yn]):
         hist, edges = np.histogramdd(
             points.detach().cpu().numpy(), bins, limits, density=True
         )
@@ -42,7 +43,9 @@ def plot_samples(X_true=None, nfm=None, nt=8, bins=50, xmax=4.5, **kwargs):
     return axs
 
 
-def plot_samples_chained(X_true=None, nfm=None, state_dicts=None, nt=8, bins=50, xmax=4.5, **kwargs):
+def plot_samples_chained(
+    X_true=None, nfm=None, state_dicts=None, nt=8, bins=50, xmax=4.5, **kwargs
+):
     """Evaluate chained models."""
     kwargs.setdefault("ec", "None")
     kwargs.setdefault("linewidth", 0.0)
@@ -62,9 +65,9 @@ def plot_samples_chained(X_true=None, nfm=None, state_dicts=None, nt=8, bins=50,
     for state_dict in reversed(state_dicts):
         nfm.load_state_dict(state_dict)
         Y, _, _, _ = nfm.inverse(Y, nt=nt)
-    
+
     fig, axs = pplt.subplots(ncols=2, nrows=2, xspineloc="neither", yspineloc="neither")
-    for ax, points in zip(axs, [X, Xn, Y, Yn]):  
+    for ax, points in zip(axs, [X, Xn, Y, Yn]):
         hist, edges = np.histogramdd(
             points.detach().cpu().numpy(), bins, limits, density=True
         )
@@ -74,16 +77,3 @@ def plot_samples_chained(X_true=None, nfm=None, state_dicts=None, nt=8, bins=50,
     axs[1, 0].format(title=r"$F^{-1}(y)$")
     axs[1, 1].format(title=r"$y$ ~ $\rho_1$")
     return axs
-
-
-def plot_loss_history(history, log=False, step=0, **kwargs):
-    keys = ["loss", "loss_L", "loss_C", "loss_R"]
-    colors = ["black", None, None, None]
-    fig, ax = pplt.subplots()
-    for key, color in zip(keys, colors):
-        ax.plot(history["iteration"], history[key], color=color, label=key, **kwargs)
-    ax.legend(ncols=1, loc="right")
-    ax.format(xlabel="Iteration", ylabel="Loss")
-    if log:
-        ax.format(yscale="log")
-    return ax
