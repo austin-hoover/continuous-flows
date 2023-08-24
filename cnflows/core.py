@@ -155,10 +155,7 @@ class OTFlow(torch.nn.Module):
             Returned if intermediates=True.
         """
         h = (tspan[1] - tspan[0]) / nt
-
-        value = 0.0  # OT-Flow hasvalue = tspan[0]
-        z = pad(x, (0, 3, 0, 0), value=value)
-        
+        z = pad(x, (0, 3, 0, 0), value=0.0)
         tk = tspan[0]
         if intermediates: 
             z_full = torch.zeros(*z.shape, nt + 1, device=x.device, dtype=x.dtype)
@@ -167,14 +164,14 @@ class OTFlow(torch.nn.Module):
                 z_full[:, :, k + 1] = self.step(z_full[:, :, k], tk, tk + h)
                 tk += h
             if tspan[0] > tspan[1]:
-                z_full[:, -2:, :] *= -1.0  # positive transport costs
+                z_full[:, -2:, :] = -z_full[:, -2:, :]  # positive transport costs
             return z_full
         else:
             for k in range(nt):
                 z = self.step(z, tk, tk + h)
                 tk += h
             if tspan[0] > tspan[1]:
-                z[:, -2:] *= -1.0  # positive transport costs
+                z[:, -2:] = -z[:, -2:]
             return z
         return -1
 
@@ -230,10 +227,7 @@ class OTFlow(torch.nn.Module):
         return self.unpack(self.integrate(x, tspan=[1.0, 0.0], nt=nt))
 
     def forward_kld(self, x, nt=8, return_costs=False):
-        """Evaluate the forward KLD + transport costs (see Eq. (8)).
-
-        Samples are transformed to latent space; the log-likelihood is evaluated
-        with respect to the base distribution.
+        """Evaluate the forward KL divergence + transport costs.
 
         Parameters
         ----------
@@ -253,18 +247,64 @@ class OTFlow(torch.nn.Module):
         """
         xn, log_det, L, R = self.forward(x, nt=nt)
         log_prob = self.base_dist.log_prob(xn) + log_det
-        cost_L = torch.mean(L)
         cost_C = torch.mean(-log_prob)
+        cost_L = torch.mean(L)
         cost_R = torch.mean(R)
         costs = (cost_L, cost_C, cost_R)
         loss = sum(scale * cost for scale, cost in zip(self.alpha, costs))
         if return_costs:
             return (loss, costs)
-        else:
-            return loss
+        return loss
 
-    def reverse_kld(self, x, nt=8):
-        raise NotImplementedError
+    def reverse_kld(self, n=1, beta=1.0, target_dist=None, nt=8, return_costs=False):
+        """Estimate the reverse KL divergence + transport costs.
+
+        Parameters
+        ----------
+        n : int
+            Number of samples to draw from the base distribution.
+        target_dist : object
+            Target distribution; must implement `log_prob(x)`.
+        nt : int
+            The number of time steps.
+        beta : float
+            Annealing parameter, see [arXiv 1505.05770](https://arxiv.org/abs/1505.05770).
+        return_costs : bool
+            Whether to return the three costs (L, C, R).
+
+        Returns
+        -------
+        loss : float
+            The objective function value ([alpha_L, alpha_C, alpha_R] \dot [L, C, R]).
+        costs : list[float], shape (3,)
+            The three computed costs: [L, C, R]. Only returned if `return_costs` is True.
+        """
+        xn = self.base_dist.sample(n)
+        x, log_det, L, R = self.inverse(xn, nt=nt)
+        log_q = self.base_dist.log_prob(xn) - log_det
+        log_p = target_dist.log_prob(x)
+        cost_C = torch.mean(log_q) - beta * torch.mean(log_p)    
+        cost_L = torch.mean(L)
+        cost_R = torch.mean(R)
+        costs = (cost_L, cost_C, cost_R)
+        loss = sum(scale * cost for scale, cost in zip(self.alpha, costs))
+        if return_costs:
+            return (loss, costs)
+        return loss
+
+    def reverse_alpha_div(self, n=1, alpha=1.0, target_dist=None, nt=8, return_costs=False):
+        xn, log_prob_base = self.base_dist(n)
+        x, log_det, L, R = self.inverse(xn, nt=nt)
+        log_q = log_prob_base - log_det
+        log_p = target_dist.log_prob(x)
+        cost_C = np.sign(alpha - 1.0) * torch.logsumexp(alpha * (log_p - log_q), 0)
+        cost_L = torch.mean(L)
+        cost_R = torch.mean(R)
+        costs = (cost_L, cost_C, cost_R)
+        loss = sum(scale * cost for scale, cost in zip(self.alpha, costs))
+        if return_costs:
+            return (loss, costs)
+        return loss
 
     def log_prob(self, x, nt=8, intermediates=False):
         """Evaluate the log-probability at x."""
