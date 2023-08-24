@@ -281,21 +281,22 @@ class OTFlow(torch.nn.Module):
 
     def sample(self, n=10, nt=8, batch_size=None):
         """Draw n samples from the model."""
+        x = None
         if batch_size is None:
             batch_size = n
-        if batch_size <= n:
+        if batch_size >= n:
             x, _, _, _ = self.inverse(self.base_dist.sample(n), nt=nt)
-            return x
-        x = torch.zeros(n, self.d)
-        for batch_index in range(int(n / batch_size)):
-            lo = batch_index * batch_size
-            hi = lo + batch_size
-            if hi > n:
-                hi = n
-                batch_size = n - lo
-            x[lo:hi], _, _, _ = self.inverse(self.base_dist.sample(batch_size), nt=nt)
+        else:
+            x = torch.zeros(n, self.d)
+            for batch_index in range(int(n / batch_size)):
+                lo = batch_index * batch_size
+                hi = lo + batch_size
+                if hi > n:
+                    hi = n
+                    batch_size = n - lo
+                x[lo:hi], _, _, _ = self.inverse(self.base_dist.sample(batch_size), nt=nt)
         return x
-
+    
 
 
 
