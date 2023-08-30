@@ -52,16 +52,13 @@ class BaseDistribution(nn.Module):
         if batch_size <= n:
             z, _ = self.forward(n, **kwargs)
             return z
-        z = torch.zeros(n, self.d)
-        for batch_index in range(int(n / batch_size)):
-            lo = batch_index * batch_size
-            hi = lo + batch_size
-            if hi > n:
-                hi = n
-                batch_size = n - lo
-            z[lo:hi], _ = self.forward(batch_size, **kwargs)
-        return z
-
+        n_batches = n // batch_size
+        n_leftover = n % batch_size
+        samples = [self.forward(batch_size, **kwargs)[0] for _ in range(n_batches)]
+        if n_leftover > 0:
+            samples.append(self.forward(n_leftover, **kwargs)[0])
+        return torch.cat(samples, dim=0)
+        
 
 class DiagGaussian(BaseDistribution):
     """Multivariate Gaussian distribution with diagonal covariance matrix."""
